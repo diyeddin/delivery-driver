@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Alert } from 'react-native';
 import { X, MapPin, Store, DollarSign, Clock } from 'lucide-react-native';
 import { useDriverStore } from '../store/driverStore';
+import { driverApi } from '../api/drivers';
 
 export default function OrderRequestModal() {
   const { incomingOrder, setIncomingOrder, setActiveOrder } = useDriverStore();
@@ -10,14 +11,12 @@ export default function OrderRequestModal() {
 
   const handleAccept = async () => {
     try {
-        // 1. Call API (We will add this later)
-        // await api.acceptOrder(incomingOrder.id);
-        
-        // 2. Update State
-        setActiveOrder(incomingOrder); // 👈 This triggers the screen switch in App.tsx!
-        setIncomingOrder(null); // Close modal
+        const acceptedOrder = await driverApi.acceptOrder(incomingOrder.id);
+        setActiveOrder(acceptedOrder);
+        setIncomingOrder(null);
     } catch (e) {
-        console.error(e);
+        Alert.alert("Error", "Failed to accept order. It may have been taken.");
+        setIncomingOrder(null);
     }
   };
 

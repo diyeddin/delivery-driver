@@ -92,11 +92,10 @@ export default function HomeScreen() {
         accuracy: Location.Accuracy.High 
       });
 
-      // @ts-ignore
       setLocation({
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
-        heading: location.coords.heading || 0,
+        heading: location.coords.heading ?? 0,
       });
 
       setStatus('online');

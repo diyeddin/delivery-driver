@@ -26,23 +26,22 @@ export interface Order {
   created_at: string;
   total_price: number;
   status: OrderStatus;
-  store: { name: string; image_url?: string };
-  items: OrderItem[];
-  address?: string;
-}
-
-export interface OrderDetail extends Order {
-  is_reviewed?: boolean;
   delivery_address?: string;
-  note?: string;
   store: {
     id: number;
     name: string;
     image_url?: string;
-    phone_number?: string;
     latitude?: number;
     longitude?: number;
+    phone_number?: string;
+    address?: string;
   };
+  items: OrderItem[];
+}
+
+export interface OrderDetail extends Order {
+  is_reviewed?: boolean;
+  note?: string;
 }
 
 export interface OrderGroup {

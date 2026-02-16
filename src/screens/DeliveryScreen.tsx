@@ -60,19 +60,19 @@ export default function DeliveryScreen() {
   };
 
   const handleUpdateStatus = async () => {
+    if (!activeOrder) return;
     setLoading(true);
     try {
       const nextStatus = activeOrder.status === 'assigned' ? 'picked_up' : 'delivered';
-      
-      await driverApi.updateStatus(activeOrder.id, nextStatus);
-      
+
+      const updatedOrder = await driverApi.updateStatus(activeOrder.id, nextStatus);
+
       if (nextStatus === 'delivered') {
         Alert.alert("🎉 Delivery Complete", "Great job! You earned $" + activeOrder.total_price);
         setActiveOrder(null);
         setStatus('online');
       } else {
-        // @ts-ignore
-        setActiveOrder({ ...activeOrder, status: nextStatus });
+        setActiveOrder(updatedOrder);
       }
     } catch (error) {
       Alert.alert("Error", "Failed to update status");
@@ -149,9 +149,9 @@ export default function DeliveryScreen() {
             <Text className="text-gray-500 text-xs font-bold uppercase mb-1">{stepTitle}</Text>
             <Text className="text-2xl font-bold text-gray-900">{stepSubtitle}</Text>
             <Text className="text-gray-400 text-sm mt-1 max-w-[250px]" numberOfLines={1}>
-              {activeOrder.status === 'assigned' 
-                ? activeOrder.store?.address || "Address not provided" 
-                : activeOrder.address}
+              {activeOrder.status === 'assigned'
+                ? activeOrder.store?.address || "Address not provided"
+                : activeOrder.delivery_address || "Address not provided"}
             </Text>
           </View>
 

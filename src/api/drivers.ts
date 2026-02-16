@@ -8,13 +8,13 @@ export const driverApi = {
     return res.data;
   },
 
-  // 2. Accept an order
+  // 2. Accept an order (returns full Order with store/items)
   acceptOrder: async (orderId: number): Promise<Order> => {
     const res = await client.post(`/drivers/accept-order/${orderId}`);
-    return res.data; // Note: Backend returns { message, order_id, status }
+    return res.data;
   },
 
-  // 3. Update status (Picked Up -> Delivered)
+  // 3. Update status (returns full updated Order)
   updateStatus: async (orderId: number, newStatus: string): Promise<Order> => {
     const res = await client.patch(`/drivers/delivery-status/${orderId}`, {
       new_status: newStatus,
