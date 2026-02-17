@@ -6,7 +6,7 @@ import * as Location from 'expo-location';
 import { Power, MapPin, DollarSign, LogOut } from 'lucide-react-native';
 import { useDriverStore } from '../store/driverStore';
 import { useAuth } from '../context/AuthContext';
-import { WS_HOST } from '../api/client';
+import { WS_HOST, WS_PROTOCOL } from '../api/client';
 import OrderRequestModal from '../components/OrderRequestModal';
 
 export default function HomeScreen() {
@@ -25,46 +25,71 @@ export default function HomeScreen() {
 
   const isOnline = status === 'online';
 
-  // ─── 1. WEBSOCKET LOGIC ─────────────────────────────
+  // ─── 1. WEBSOCKET LOGIC (with reconnection & heartbeat) ─────
   useEffect(() => {
-    if (status === 'online' && token) {
-      console.log("🔌 Connecting to Driver WebSocket...");
-      
-      const protocol = WS_HOST?.includes('://') ? '' : 'ws://';
-      const wsUrl = `${protocol}${WS_HOST}/api/v1/drivers/ws?token=${token}`;
-      
+    if (status !== 'online' || !token) {
+      wsRef.current?.close();
+      wsRef.current = null;
+      return;
+    }
+
+    let reconnectAttempts = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    let isCancelled = false;
+
+    const connect = () => {
+      if (isCancelled) return;
+
+      const wsUrl = `${WS_PROTOCOL}://${WS_HOST}/api/v1/drivers/ws?token=${token}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
-      ws.onopen = () => console.log("✅ Driver WS Connected");
-      
+      ws.onopen = () => {
+        reconnectAttempts = 0;
+
+        // Heartbeat every 25s — backend responds with "pong"
+        heartbeatTimer = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send('ping');
+          }
+        }, 25000);
+      };
+
       ws.onmessage = (event) => {
+        // Ignore pong responses
+        if (event.data === 'pong') return;
+
         try {
           const data = JSON.parse(event.data);
-          console.log("📩 WS Message:", data);
 
           if (data.type === 'new_order') {
             setIncomingOrder(data.order);
-            // TODO: Play sound here
           }
         } catch (e) {
-          console.error("WS Parse Error", e);
+          console.error('WS Parse Error', e);
         }
       };
 
-      ws.onerror = (e) => {
-        console.log("❌ WS Error", (e as any).message);
-      };
+      ws.onerror = () => {};
 
       ws.onclose = () => {
-        console.log("🔌 Driver WS Closed");
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        if (isCancelled) return;
+
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+        reconnectAttempts++;
+        reconnectTimer = setTimeout(connect, delay);
       };
-    } else {
-      wsRef.current?.close();
-      wsRef.current = null;
-    }
+    };
+
+    connect();
 
     return () => {
+      isCancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
       wsRef.current?.close();
       locationWatcherRef.current?.remove();
     };
