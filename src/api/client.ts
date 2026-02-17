@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { storage } from '../utils/storage';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 
@@ -9,17 +9,27 @@ export const WS_HOST = process.env.EXPO_PUBLIC_WS_HOST;
 // ─── Auth Interceptor Manager ───────────────────────
 class AuthInterceptorManager {
   private logoutFn: (() => void) | null = null;
+  private onTokenRefreshed: ((accessToken: string, refreshToken: string) => void) | null = null;
 
-  setup(fn: () => void) {
-    this.logoutFn = fn;
+  setup(
+    logoutFn: () => void,
+    onTokenRefreshed: (accessToken: string, refreshToken: string) => void,
+  ) {
+    this.logoutFn = logoutFn;
+    this.onTokenRefreshed = onTokenRefreshed;
   }
 
   logout() {
     this.logoutFn?.();
   }
 
+  handleNewTokens(accessToken: string, refreshToken: string) {
+    this.onTokenRefreshed?.(accessToken, refreshToken);
+  }
+
   teardown() {
     this.logoutFn = null;
+    this.onTokenRefreshed = null;
   }
 }
 
@@ -50,14 +60,89 @@ client.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Response Interceptor: Catch 401s (Session Expired)
+// ─── Token Refresh Logic ────────────────────────────
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: unknown) => void;
+}> = [];
+
+function processQueue(error: unknown, token: string | null) {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve(token!);
+    }
+  });
+  failedQueue = [];
+}
+
+// Response Interceptor: Attempt refresh on 401, then retry
 client.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response && error.response.status === 401) {
-      console.log('Session expired (401). Logging out...');
-      authInterceptor.logout();
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    // Only attempt refresh for 401s that aren't from auth endpoints
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/login') &&
+      !originalRequest.url?.includes('/auth/refresh')
+    ) {
+      if (isRefreshing) {
+        // Another refresh is in progress — queue this request
+        return new Promise((resolve, reject) => {
+          failedQueue.push({
+            resolve: (token: string) => {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              resolve(client(originalRequest));
+            },
+            reject,
+          });
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const refreshToken = await storage.getRefreshToken();
+        if (!refreshToken) {
+          throw new Error('No refresh token');
+        }
+
+        const { data } = await axios.post(`${API_URL}/auth/refresh`, {
+          refresh_token: refreshToken,
+        });
+
+        const newAccessToken: string = data.access_token;
+        const newRefreshToken: string = data.refresh_token;
+
+        // Persist new tokens
+        await storage.setToken(newAccessToken);
+        await storage.setRefreshToken(newRefreshToken);
+
+        // Notify AuthContext so in-memory state stays in sync
+        authInterceptor.handleNewTokens(newAccessToken, newRefreshToken);
+
+        // Retry queued requests
+        processQueue(null, newAccessToken);
+
+        // Retry the original request
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return client(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        authInterceptor.logout();
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
     }
+
     return Promise.reject(error);
   }
 );

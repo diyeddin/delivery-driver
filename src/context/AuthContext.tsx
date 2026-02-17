@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
-import { View, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, ActivityIndicator, Alert } from 'react-native';
 import { jwtDecode } from 'jwt-decode';
 import { storage } from '../utils/storage';
 import { authInterceptor } from '../api/client';
-import { usersApi } from '../api/users'; 
+import { usersApi } from '../api/users';
 import { User } from '../types';
 import Toast from 'react-native-toast-message';
 import * as Device from 'expo-device';
@@ -24,7 +24,7 @@ Notifications.setNotificationHandler({
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (token: string) => Promise<void>;
+  login: (accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -41,6 +41,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setToken(null);
     setUser(null);
     await storage.removeToken();
+    await storage.removeRefreshToken();
   }, []);
 
   // Interceptor setup
@@ -48,10 +49,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => { logoutRef.current = logout; }, [logout]);
 
   useEffect(() => {
-    authInterceptor.setup(() => {
-      logoutRef.current();
-      Toast.show({ type: 'error', text1: 'Session Expired', text2: 'Please log in again.' });
-    });
+    authInterceptor.setup(
+      () => {
+        logoutRef.current();
+        Toast.show({ type: 'error', text1: 'Session Expired', text2: 'Please log in again.' });
+      },
+      (newAccessToken: string, _newRefreshToken: string) => {
+        // Update in-memory state when interceptor refreshes tokens
+        try {
+          const decoded = jwtDecode<User>(newAccessToken);
+          setToken(newAccessToken);
+          setUser(decoded);
+        } catch {}
+      },
+    );
     return () => authInterceptor.teardown();
   }, []);
 
@@ -62,14 +73,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const storedToken = await storage.getToken();
         if (storedToken) {
           const decoded = jwtDecode<User>(storedToken);
-          // Check Expiry
-          if (decoded.exp && decoded.exp < (Date.now() / 1000)) {
-            await logout();
-          } 
           // Check Role (Security)
-          else if (decoded.role !== 'driver' && decoded.role !== 'admin') {
+          if (decoded.role !== 'driver' && decoded.role !== 'admin') {
             Alert.alert('Access Denied', 'This app is for Drivers only.');
             await logout();
+          } else if (decoded.exp && decoded.exp < (Date.now() / 1000)) {
+            // Access token expired — check if we have a refresh token
+            const refreshToken = await storage.getRefreshToken();
+            if (refreshToken) {
+              // Keep user in "logged in" state; interceptor will refresh on first API call
+              setToken(storedToken);
+              setUser(decoded);
+            } else {
+              await logout();
+            }
           } else {
             setToken(storedToken);
             setUser(decoded);
@@ -98,7 +115,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
       const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-      
+
       // Send to backend
       await usersApi.registerPushToken(tokenData.data);
     } catch (error) {
@@ -106,19 +123,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const login = async (newToken: string) => {
+  const login = async (accessToken: string, refreshToken: string) => {
     try {
-      const decoded = jwtDecode<User>(newToken);
-      
+      const decoded = jwtDecode<User>(accessToken);
+
       if (decoded.role !== 'driver' && decoded.role !== 'admin') {
         Alert.alert('Access Denied', 'This account is not a driver account.');
         return;
       }
 
-      setToken(newToken);
+      setToken(accessToken);
       setUser(decoded);
-      await storage.setToken(newToken);
-      
+      await storage.setToken(accessToken);
+      await storage.setRefreshToken(refreshToken);
+
       // Register push token silently after login
       setTimeout(() => registerPushToken(), 2000);
 

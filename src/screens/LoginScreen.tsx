@@ -17,7 +17,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const data = await authApi.login(email, password);
-      await login(data.access_token);
+      await login(data.access_token, data.refresh_token);
     } catch (error) {
       handleApiError(error, { fallbackTitle: 'Login Failed' });
     } finally {
