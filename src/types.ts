@@ -27,6 +27,8 @@ export interface Order {
   total_price: number;
   status: OrderStatus;
   delivery_address?: string;
+  delivery_latitude?: number;
+  delivery_longitude?: number;
   store: {
     id: number;
     name: string;

@@ -15,22 +15,19 @@ export default function DeliveryScreen() {
   const [loading, setLoading] = useState(false);
 
   // ─── 1. COORDINATE LOGIC ─────────────────────────────
-  // TODO: Update your Backend Serializers to return real lat/lng!
-  // For now, we mock positions relative to the driver so the map works.
-  
   const driverCoords = {
     latitude: location?.latitude || 33.5138,
     longitude: location?.longitude || 36.2765,
   };
 
   const storeCoords = {
-    latitude: activeOrder?.store?.latitude || driverCoords.latitude + 0.01, // Mock: 1km North
+    latitude: activeOrder?.store?.latitude || driverCoords.latitude + 0.01,
     longitude: activeOrder?.store?.longitude || driverCoords.longitude + 0.005,
   };
 
   const customerCoords = {
-    latitude: activeOrder?.latitude || driverCoords.latitude - 0.01, // Mock: 1km South
-    longitude: activeOrder?.longitude || driverCoords.longitude + 0.01,
+    latitude: activeOrder?.delivery_latitude || driverCoords.latitude - 0.01,
+    longitude: activeOrder?.delivery_longitude || driverCoords.longitude + 0.01,
   };
 
   // ─── 2. MAP EFFECTS ──────────────────────────────────
