@@ -10,17 +10,18 @@ import { WS_HOST } from '../api/client';
 import OrderRequestModal from '../components/OrderRequestModal';
 
 export default function HomeScreen() {
-  const { 
-    status, 
-    setStatus, 
-    setLocation, 
-    isConnecting, 
-    setConnecting, 
-    setIncomingOrder 
+  const {
+    status,
+    setStatus,
+    setLocation,
+    isConnecting,
+    setConnecting,
+    setIncomingOrder
   } = useDriverStore();
-  
+
   const { user, token, logout } = useAuth();
   const wsRef = useRef<WebSocket | null>(null);
+  const locationWatcherRef = useRef<Location.LocationSubscription | null>(null);
 
   const isOnline = status === 'online';
 
@@ -65,13 +66,22 @@ export default function HomeScreen() {
 
     return () => {
       wsRef.current?.close();
+      locationWatcherRef.current?.remove();
     };
   }, [status, token]);
 
   // ─── 2. TOGGLE ONLINE/OFFLINE ───────────────────────
+  const stopLocationWatcher = () => {
+    if (locationWatcherRef.current) {
+      locationWatcherRef.current.remove();
+      locationWatcherRef.current = null;
+    }
+  };
+
   const toggleOnline = async () => {
     if (isOnline) {
       // Go Offline
+      stopLocationWatcher();
       setLocation({ latitude: 0, longitude: 0, heading: 0 });
       setStatus('offline');
       return;
@@ -87,16 +97,28 @@ export default function HomeScreen() {
         return;
       }
 
-      // 2. Get Real Location directly
-      const location = await Location.getCurrentPositionAsync({ 
-        accuracy: Location.Accuracy.High 
-      });
+      // 2. Start continuous location tracking
+      const subscription = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, distanceInterval: 50, timeInterval: 10000 },
+        (loc) => {
+          const coords = {
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+            heading: loc.coords.heading ?? 0,
+          };
+          setLocation(coords);
 
-      setLocation({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        heading: location.coords.heading ?? 0,
-      });
+          // Send to backend via WebSocket
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+              type: 'location_update',
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+            }));
+          }
+        }
+      );
+      locationWatcherRef.current = subscription;
 
       setStatus('online');
 
@@ -120,6 +142,7 @@ export default function HomeScreen() {
           style: 'destructive', 
           onPress: async () => {
             if (isOnline) {
+              stopLocationWatcher();
               setStatus('offline');
             }
             await logout();
