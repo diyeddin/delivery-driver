@@ -7,7 +7,6 @@ import { Power, MapPin, DollarSign, LogOut } from 'lucide-react-native';
 import { useDriverStore } from '../store/driverStore';
 import { useAuth } from '../context/AuthContext';
 import { WS_HOST, WS_PROTOCOL } from '../api/client';
-import OrderRequestModal from '../components/OrderRequestModal';
 
 export default function HomeScreen() {
   const {
@@ -247,8 +246,6 @@ export default function HomeScreen() {
           <Text className="text-xs text-gray-400">Trips</Text>
         </View>
       </View>
-
-      <OrderRequestModal />
     </SafeAreaView>
   );
 }

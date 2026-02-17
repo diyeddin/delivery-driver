@@ -87,3 +87,14 @@ export interface DriverStats {
 
 // ─── Navigation ─────────────────────────────────────
 
+export type RootStackParamList = {
+  Login: undefined;
+  MainTabs: undefined;
+  Delivery: { orderId: number };
+};
+
+export type MainTabParamList = {
+  Home: undefined;
+  Orders: undefined;
+  Deliveries: undefined;
+};

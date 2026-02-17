@@ -26,5 +26,11 @@ export const driverApi = {
   getHistory: async (limit = 20): Promise<Order[]> => {
     const res = await client.get(`/drivers/history?limit=${limit}`);
     return res.data;
-  }
+  },
+
+  // 5. Get available (confirmed) orders to accept
+  getAvailableOrders: async (): Promise<Order[]> => {
+    const res = await client.get('/drivers/available-orders');
+    return res.data;
+  },
 };

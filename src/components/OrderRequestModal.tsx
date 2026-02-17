@@ -1,19 +1,25 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Modal, Alert } from 'react-native';
 import { X, MapPin, Store, DollarSign, Clock } from 'lucide-react-native';
+import Toast from 'react-native-toast-message';
 import { useDriverStore } from '../store/driverStore';
 import { driverApi } from '../api/drivers';
 
 export default function OrderRequestModal() {
-  const { incomingOrder, setIncomingOrder, setActiveOrder } = useDriverStore();
+  const { incomingOrder, setIncomingOrder, addActiveOrder } = useDriverStore();
 
   if (!incomingOrder) return null;
 
   const handleAccept = async () => {
     try {
         const acceptedOrder = await driverApi.acceptOrder(incomingOrder.id);
-        setActiveOrder(acceptedOrder);
+        addActiveOrder(acceptedOrder);
         setIncomingOrder(null);
+        Toast.show({
+          type: 'success',
+          text1: 'Order Accepted',
+          text2: `Order #${acceptedOrder.id} added to your deliveries`,
+        });
     } catch (e) {
         Alert.alert("Error", "Failed to accept order. It may have been taken.");
         setIncomingOrder(null);
@@ -21,7 +27,6 @@ export default function OrderRequestModal() {
   };
 
   const handleReject = () => {
-    // TODO: Call API to reject
     console.log("Rejected Order:", incomingOrder.id);
     setIncomingOrder(null);
   };
@@ -30,7 +35,7 @@ export default function OrderRequestModal() {
     <Modal visible={!!incomingOrder} transparent animationType="slide">
       <View className="flex-1 justify-end bg-black/50">
         <View className="bg-white rounded-t-3xl p-6 shadow-2xl">
-          
+
           {/* Header */}
           <View className="flex-row justify-between items-center mb-6">
             <Text className="text-2xl font-bold text-gray-900">New Delivery Request!</Text>
@@ -82,7 +87,7 @@ export default function OrderRequestModal() {
 
           {/* Buttons */}
           <View className="flex-row gap-4">
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={handleReject}
               className="flex-1 bg-gray-100 py-4 rounded-xl items-center"
             >
@@ -90,7 +95,7 @@ export default function OrderRequestModal() {
               <Text className="text-gray-900 font-bold mt-1">Decline</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={handleAccept}
               className="flex-2 flex-grow bg-green-500 py-4 rounded-xl items-center shadow-lg shadow-green-500/30"
             >

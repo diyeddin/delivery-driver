@@ -2,17 +2,31 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Dimensions, Platform } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, Store, Navigation, Phone, MessageSquare } from 'lucide-react-native';
+import { MapPin, Store, Navigation, Phone, MessageSquare, ArrowLeft } from 'lucide-react-native';
+import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { useDriverStore } from '../store/driverStore';
 import { driverApi } from '../api/drivers';
+import { RootStackParamList } from '../types';
 import * as Linking from 'expo-linking';
 
 const { width, height } = Dimensions.get('window');
 
 export default function DeliveryScreen() {
   const mapRef = useRef<MapView>(null);
-  const { activeOrder, setActiveOrder, setStatus, location } = useDriverStore();
+  const route = useRoute<RouteProp<RootStackParamList, 'Delivery'>>();
+  const navigation = useNavigation();
+  const { orderId } = route.params;
+
+  const { activeOrders, updateActiveOrder, removeActiveOrder, location } = useDriverStore();
+  const activeOrder = activeOrders.find(o => o.id === orderId);
   const [loading, setLoading] = useState(false);
+
+  // If order was removed (e.g. completed elsewhere), go back
+  useEffect(() => {
+    if (!activeOrder) {
+      navigation.goBack();
+    }
+  }, [activeOrder, navigation]);
 
   // ─── 1. COORDINATE LOGIC ─────────────────────────────
   const driverCoords = {
@@ -32,8 +46,7 @@ export default function DeliveryScreen() {
 
   // ─── 2. MAP EFFECTS ──────────────────────────────────
   useEffect(() => {
-    // Auto-zoom to fit markers when screen loads
-    if (mapRef.current && location) {
+    if (mapRef.current && location && activeOrder) {
       mapRef.current.fitToCoordinates([driverCoords, storeCoords, customerCoords], {
         edgePadding: { top: 100, right: 50, bottom: 350, left: 50 },
         animated: true,
@@ -48,7 +61,7 @@ export default function DeliveryScreen() {
     const destLat = activeOrder.status === 'assigned' ? storeCoords.latitude : customerCoords.latitude;
     const destLng = activeOrder.status === 'assigned' ? storeCoords.longitude : customerCoords.longitude;
     const label = activeOrder.status === 'assigned' ? activeOrder.store?.name : "Customer";
-    
+
     const url = Platform.select({
       ios: `maps:0,0?q=${label}@${destLat},${destLng}`,
       android: `geo:0,0?q=${destLat},${destLng}(${label})`,
@@ -65,11 +78,11 @@ export default function DeliveryScreen() {
       const updatedOrder = await driverApi.updateStatus(activeOrder.id, nextStatus);
 
       if (nextStatus === 'delivered') {
-        Alert.alert("🎉 Delivery Complete", "Great job! You earned $" + activeOrder.total_price);
-        setActiveOrder(null);
-        setStatus('online');
+        Alert.alert("Delivery Complete", "Great job! You earned $" + activeOrder.total_price);
+        removeActiveOrder(activeOrder.id);
+        navigation.goBack();
       } else {
-        setActiveOrder(updatedOrder);
+        updateActiveOrder(updatedOrder);
       }
     } catch (error) {
       Alert.alert("Error", "Failed to update status");
@@ -85,7 +98,7 @@ export default function DeliveryScreen() {
 
   return (
     <View className="flex-1 bg-white">
-      
+
       {/* ─── MAP VIEW ────────────────────────────────── */}
       <MapView
         ref={mapRef}
@@ -99,8 +112,6 @@ export default function DeliveryScreen() {
         showsUserLocation={true}
         followsUserLocation={true}
       >
-        {/* Driver Marker (Built-in showsUserLocation handles this, but custom one is cool too) */}
-        
         {/* Store Marker */}
         <Marker coordinate={storeCoords} title={activeOrder.store?.name} description="Pick up here">
           <View className="bg-white p-2 rounded-full border border-blue-500 shadow-sm">
@@ -115,17 +126,23 @@ export default function DeliveryScreen() {
           </View>
         </Marker>
 
-        {/* Route Line (Simple straight line for now) */}
-        <Polyline 
-          coordinates={[driverCoords, storeCoords, customerCoords]} 
-          strokeColor="#000" 
-          strokeWidth={3} 
+        {/* Route Line */}
+        <Polyline
+          coordinates={[driverCoords, storeCoords, customerCoords]}
+          strokeColor="#000"
+          strokeWidth={3}
           lineDashPattern={[1]}
         />
       </MapView>
 
       {/* ─── FLOATING TOP HEADER ─────────────────────── */}
-      <SafeAreaView className="absolute top-0 w-full flex-row justify-between px-4" pointerEvents="box-none">
+      <SafeAreaView className="absolute top-0 w-full flex-row justify-between items-center px-4" pointerEvents="box-none">
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          className="bg-white p-2.5 rounded-full shadow-md"
+        >
+          <ArrowLeft size={20} color="#374151" />
+        </TouchableOpacity>
         <View className="bg-white px-4 py-2 rounded-full shadow-md">
            <Text className="font-bold text-gray-800">Order #{activeOrder.id}</Text>
         </View>
@@ -136,7 +153,7 @@ export default function DeliveryScreen() {
 
       {/* ─── BOTTOM CARD ─────────────────────────────── */}
       <View className="absolute bottom-0 w-full bg-white rounded-t-3xl shadow-2xl p-6 pb-10">
-        
+
         {/* Handle Bar */}
         <View className="w-12 h-1 bg-gray-200 rounded-full self-center mb-6" />
 
@@ -153,7 +170,7 @@ export default function DeliveryScreen() {
           </View>
 
           {/* Navigation Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={handleOpenMaps}
             className="bg-gray-100 p-4 rounded-full"
           >
@@ -174,7 +191,7 @@ export default function DeliveryScreen() {
         </View>
 
         {/* Main Action Button */}
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={handleUpdateStatus}
           disabled={loading}
           className={`w-full py-5 rounded-xl items-center flex-row justify-center shadow-lg ${buttonColor}`}
