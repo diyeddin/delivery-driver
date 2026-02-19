@@ -15,7 +15,8 @@ export default function HomeScreen() {
     setLocation,
     isConnecting,
     setConnecting,
-    setIncomingOrder
+    setIncomingOrder,
+    checkForActiveOrders
   } = useDriverStore();
 
   const { user, token, logout } = useAuth();
@@ -106,7 +107,7 @@ export default function HomeScreen() {
     if (isOnline) {
       // Go Offline
       stopLocationWatcher();
-      setLocation({ latitude: 0, longitude: 0, heading: 0 });
+      setLocation(null);
       setStatus('offline');
       return;
     }
@@ -145,6 +146,7 @@ export default function HomeScreen() {
       locationWatcherRef.current = subscription;
 
       setStatus('online');
+      checkForActiveOrders();
 
     } catch (error) {
       console.error(error);

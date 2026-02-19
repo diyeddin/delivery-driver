@@ -30,18 +30,18 @@ export default function DeliveryScreen() {
 
   // ─── 1. COORDINATE LOGIC ─────────────────────────────
   const driverCoords = {
-    latitude: location?.latitude || 33.5138,
-    longitude: location?.longitude || 36.2765,
+    latitude: location?.latitude ?? 33.5138,
+    longitude: location?.longitude ?? 36.2765,
   };
 
   const storeCoords = {
-    latitude: activeOrder?.store?.latitude || driverCoords.latitude + 0.01,
-    longitude: activeOrder?.store?.longitude || driverCoords.longitude + 0.005,
+    latitude: activeOrder?.store?.latitude ?? driverCoords.latitude + 0.01,
+    longitude: activeOrder?.store?.longitude ?? driverCoords.longitude + 0.005,
   };
 
   const customerCoords = {
-    latitude: activeOrder?.delivery_latitude || driverCoords.latitude - 0.01,
-    longitude: activeOrder?.delivery_longitude || driverCoords.longitude + 0.01,
+    latitude: activeOrder?.delivery_latitude ?? driverCoords.latitude - 0.01,
+    longitude: activeOrder?.delivery_longitude ?? driverCoords.longitude + 0.01,
   };
 
   // ─── 2. MAP EFFECTS ──────────────────────────────────

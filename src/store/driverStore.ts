@@ -10,7 +10,7 @@ interface DriverState {
   activeOrders: Order[];
 
   setStatus: (status: DriverStatus) => void;
-  setLocation: (location: DriverLocation) => void;
+  setLocation: (location: DriverLocation | null) => void;
   setConnecting: (loading: boolean) => void;
   setIncomingOrder: (order: Order | null) => void;
 
