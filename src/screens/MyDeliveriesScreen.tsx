@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Store, ChevronRight, Package } from 'lucide-react-native';
+import Toast from 'react-native-toast-message';
 import { useDriverStore } from '../store/driverStore';
 import { RootStackParamList, Order, OrderStatus } from '../types';
 
@@ -26,7 +27,8 @@ function getStatusDisplay(status: OrderStatus) {
 
 export default function MyDeliveriesScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { activeOrders, checkForActiveOrders } = useDriverStore();
+  const { activeOrders, checkForActiveOrders, status } = useDriverStore();
+  const isOnline = status === 'online';
   const [refreshing, setRefreshing] = React.useState(false);
 
   const onRefresh = React.useCallback(async () => {
@@ -36,6 +38,10 @@ export default function MyDeliveriesScreen() {
   }, [checkForActiveOrders]);
 
   const handlePress = (order: Order) => {
+    if (!isOnline) {
+      Toast.show({ type: 'error', text1: 'You are offline', text2: 'Go online to manage deliveries' });
+      return;
+    }
     navigation.navigate('Delivery', { orderId: order.id });
   };
 
@@ -68,8 +74,9 @@ export default function MyDeliveriesScreen() {
           return (
             <TouchableOpacity
               onPress={() => handlePress(item)}
-              className="bg-white rounded-2xl p-4 shadow-sm"
-              activeOpacity={0.7}
+              className={`rounded-2xl p-4 shadow-sm ${isOnline ? 'bg-white' : 'bg-gray-100'}`}
+              activeOpacity={isOnline ? 0.7 : 1}
+              style={!isOnline ? { opacity: 0.5 } : undefined}
             >
               <View className="flex-row items-center justify-between">
                 {/* Left: Store info */}
